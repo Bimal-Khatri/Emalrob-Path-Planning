@@ -1,0 +1,159 @@
+// WHO:  Bimal Raj Khatri
+// WHEN: 2022-02-20
+// WHAT: Obstacle detection and path following
+#include "ft_ESP32_IOobjects.h"
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Wire.h>
+#include <math.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+#include <Utility/imumaths.h>
+
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+Adafruit_BNO055 IMUsensor=Adafruit_BNO055(55, 0x28);
+
+enum Motor_Port {Motor_0, Motor_1};
+
+enum Led_Port {L0, L1, L2, L3, L4, L5, L6, L7, L8, L9, L10};
+
+enum Servo_Port {Servo_0, Servo_1, Servo_2, Servo_3};
+
+enum Digital_Port {Digital_0, Digital_1, Digital_2, Digital_3,
+                   Digital_4, Digital_5, Digital_6, Digital_7};
+
+enum Analog_Port {Analog_0, Analog_1, Analog_2, Analog_3,
+                  Analog_4, Analog_5, Analog_6, Analog_7};
+
+/* global objects */
+Motor mMotorArray[MOTOR_QTY];
+Led mLedArray[LED_QTY];
+CServoMotor mServoArray[SERVO_QTY];
+DigitalAnalogIn mDAIn[DAIN_QTY];
+
+/* setup enum */
+Motor_Port mMotor;
+Led_Port mLed;
+Digital_Port mDigital_Port;
+Analog_Port mAnalog_Port;
+
+const int FrontPin= 34;
+int FrontSwitch=0;
+const int SPin=25;
+float ref=0;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(FrontPin, INPUT);   //This is to set the input variable so as to get the voltage reading
+  digitalWrite(FrontPin,LOW);
+  pinMode(SPin, INPUT);
+  IMUsensor.begin(); //initiate the IMU sensor 
+  delay(1000);
+  /* ----- motor objects ----- */
+  for(unsigned int i = 0; i < MOTOR_QTY; i++) {
+    mMotorArray[i] = Motor(i);
+  }
+
+  /* ----- led objects ----- */
+
+  /* -> initialize led strip */
+  led_init();
+
+  for(unsigned int i = 0; i < LED_QTY; i++) {
+    mLedArray[i] = Led(i);
+  }
+
+  /* -> clear remaining led pixel information */
+  led_clear();
+
+  /* ----- servo objects ----- */
+  for(unsigned int i = 0; i < SERVO_QTY; i++) {
+    mServoArray[i] = CServoMotor(i);
+  }
+
+  /* ----- input objects ----- */
+  for(unsigned int i = 0; i < DAIN_QTY; i++) {
+    mDAIn[i] = DigitalAnalogIn(i);
+  }
+}
+
+void loop() {
+
+uint8_t system, gCal, aCal, mCal;
+//calibrating the sensor at the beginning
+IMUsensor.getCalibration(&system, &gCal, &aCal, &mCal);
+
+while(true) { 
+  FrontSwitch=  digitalRead(FrontPin);
+  SideSwitch=  digitalRead(SPin);
+  // Extracting the rotation value from the IMU sensor adafruit BNO055 sensor
+imu::Vector<3> euler = IMUsensor.getVector(Adafruit_BNO055::VECTOR_EULER);
+     
+if (FrontSwitch==0) {
+  // to keep the robot moving forward unless it's front switch is pressed
+     mMotorArray[Motor_1].setValues(0,12);
+     mMotorArray[Motor_0].setValues(0,12); 
+     delay(700);
+     mMotorArray[Motor_1].setValues(0,0);
+     mMotorArray[Motor_0].setValues(1,20);  
+     delay(700);
+    FrontSwitch=  digitalRead(FrontPin);
+  }
+
+// Around 360 degree the robot starting rotating anticlockwise till 270 degree, 90 degree rotation
+  ref=euler.x();  
+  if (ref>= 275 && ref<=355)
+  {
+    mMotorArray[Motor_1].setValues(1,0);
+       mMotorArray[Motor_0].setValues(1,20); 
+        delay(200);
+        ref=euler.x();
+  }
+
+
+else if (ref>=1 && ref<=29){
+       Serial.print("X: ");
+       Serial.print(euler.x());
+       mMotorArray[Motor_1].setValues(1,0);
+       mMotorArray[Motor_0].setValues(1,12); 
+        delay(200);
+        ref=euler.x();
+   }
+     //There should be certain gap in those two reference criteria inorder to leave the gap for moving the robot forward
+else if (ref<=265 && ref>=180) {
+       Serial.print("X: ");
+       Serial.print(euler.x());
+       mMotorArray[Motor_1].setValues(1,0);
+       mMotorArray[Motor_0].setValues(1,12); 
+        delay(200);
+        ref=euler.x();
+     } 
+     //the third corner turn
+ else if (ref<=175 && ref>=90) {
+       Serial.print("X: ");
+       Serial.print(euler.x());
+       mMotorArray[Motor_1].setValues(1,0);
+       mMotorArray[Motor_0].setValues(1,12); 
+        delay(200);
+        ref=euler.x();
+         FrontSwitch=  digitalRead(FrontPin);
+        
+     } 
+     //for turning of the robot after reaching the station 
+ else if (ref<=85 && ref>=30) {
+         mMotorArray[Motor_1].setValues(1,0);
+       mMotorArray[Motor_0].setValues(1,0); 
+        delay(1000);
+        ref=euler.x();
+        }   
+ else {  
+     Serial.print("terminated");
+     mMotorArray[Motor_1].setValues(1,12);
+     mMotorArray[Motor_0].setValues(1,12);
+     delay(1000);
+  } 
+     } 
+  }
